@@ -35,6 +35,88 @@ const aiLoading = ref(false)
 const pushingConfig = ref(false)
 const aiSuggestion = ref<AISuggestion | null>(null)
 
+// Apply Template State
+const showApplyModal = ref(false)
+const applyingTemplate = ref<ConfigTemplate | null>(null)
+const applyFormValues = ref<Record<string, any>>({})
+const applyRouterId = ref<number | null>(null)
+const applyingConfig = ref(false)
+
+// Apply Template Computed
+const generatedApplyConfig = computed(() => {
+  if (!applyingTemplate.value) return ''
+  
+  let config = applyingTemplate.value.content
+  
+  // Replace simple variables
+  for (const [key, value] of Object.entries(applyFormValues.value)) {
+    const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g')
+    config = config.replace(regex, String(value))
+  }
+  
+  // Handle simple arrays (neighbors, networks) - basic replacement
+  // For complex templates, we need more sophisticated parsing
+  
+  return config
+})
+
+function openApplyTemplate(template: ConfigTemplate) {
+  applyingTemplate.value = template
+  
+  // Initialize form values with defaults
+  const initialValues: Record<string, any> = {}
+  for (const [key, varDef] of Object.entries(template.variables || {})) {
+    if (varDef.type === 'array') {
+      initialValues[key] = varDef.default || []
+    } else {
+      initialValues[key] = varDef.default || ''
+    }
+  }
+  applyFormValues.value = initialValues
+  applyRouterId.value = null
+  showApplyModal.value = true
+}
+
+async function handleApplyTemplateConfig() {
+  if (!applyingTemplate.value || !applyRouterId.value) return
+  
+  applyingConfig.value = true
+  try {
+    const config = generatedApplyConfig.value
+    const result = await routerStore.executeCommand(applyRouterId.value, config)
+    if (result.success) {
+      alert('Configuration applied successfully!')
+      showApplyModal.value = false
+      applyingTemplate.value = null
+    } else {
+      alert('Error: ' + result.output)
+    }
+  } catch (e: any) {
+    alert('Error: ' + e.message)
+  } finally {
+    applyingConfig.value = false
+  }
+}
+
+function addArrayItem(key: string) {
+  const varDef = applyingTemplate.value?.variables?.[key]
+  if (varDef?.type === 'array') {
+    const props = varDef.properties || {}
+    const newItem: Record<string, any> = {}
+    for (const [pKey, pDef] of Object.entries(props)) {
+      newItem[pKey] = pDef.default || ''
+    }
+    
+    const current = applyFormValues.value[key] || []
+    applyFormValues.value[key] = [...current, newItem]
+  }
+}
+
+function removeArrayItem(key: string, index: number) {
+  const current = applyFormValues.value[key] || []
+  applyFormValues.value[key] = current.filter((_: any, i: number) => i !== index)
+}
+
 const promptForm = ref({
   prompt: '',
   vendor: 'cisco_ios' as Vendor,
@@ -547,6 +629,10 @@ onMounted(async () => {
               >
                 <Copy class="w-4 h-4" />
               </button>
+              <AppButton size="sm" variant="success" @click="openApplyTemplate(template)">
+                <Send class="w-3 h-3" />
+                Apply
+              </AppButton>
               <button
                 @click="openEdit(template)"
                 class="p-1.5 hover:bg-slate-700 rounded-lg transition-colors"
@@ -901,6 +987,131 @@ onMounted(async () => {
         >
           <Send class="w-4 h-4" />
           Push to Router
+        </AppButton>
+      </template>
+    </Modal>
+
+    <!-- Apply Template Modal -->
+    <Modal :open="showApplyModal" :title="`Apply Template: ${applyingTemplate?.name || ''}`" size="xl" @close="showApplyModal = false; applyingTemplate = null">
+      <div v-if="applyingTemplate" class="space-y-6">
+        <!-- Template Info -->
+        <div class="bg-slate-700/50 p-3 rounded-lg">
+          <p class="text-sm text-slate-300">
+            <span class="font-medium">Vendor:</span> {{ applyingTemplate.vendor }} | 
+            <span class="font-medium">Category:</span> {{ applyingTemplate.category }}
+          </p>
+        </div>
+
+        <!-- Variable Form -->
+        <div class="space-y-4">
+          <h3 class="font-medium text-cyan-400">Fill Variables</h3>
+          
+          <template v-for="(varDef, key) in applyingTemplate.variables" :key="key">
+            <!-- String/Number Input -->
+            <div v-if="varDef.type === 'string' || varDef.type === 'number'">
+              <label class="block text-sm font-medium mb-1">
+                {{ varDef.label || key }} 
+                <span v-if="varDef.required" class="text-red-400">*</span>
+              </label>
+              <input
+                v-model="applyFormValues[key]"
+                :type="varDef.type === 'number' ? 'number' : 'text'"
+                :placeholder="varDef.description || ''"
+                class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <!-- Select Input -->
+            <div v-else-if="varDef.type === 'select' || varDef.options">
+              <label class="block text-sm font-medium mb-1">
+                {{ varDef.label || key }}
+                <span v-if="varDef.required" class="text-red-400">*</span>
+              </label>
+              <select
+                v-model="applyFormValues[key]"
+                class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option v-for="opt in (varDef.options || [])" :key="opt" :value="opt">{{ opt }}</option>
+              </select>
+            </div>
+
+            <!-- Array Input -->
+            <div v-else-if="varDef.type === 'array'">
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-sm font-medium">
+                  {{ varDef.label || key }}
+                  <span v-if="varDef.required" class="text-red-400">*</span>
+                </label>
+                <AppButton size="sm" variant="outline" @click="addArrayItem(key)">
+                  <Plus class="w-3 h-3" />
+                  Add
+                </AppButton>
+              </div>
+              
+              <!-- Array Items -->
+              <div v-for="(item, index) in (applyFormValues[key] || [])" :key="index" class="bg-slate-700/50 p-3 rounded-lg mb-2">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs text-slate-400">Item {{ index + 1 }}</span>
+                  <button @click="removeArrayItem(key, index)" class="text-red-400 hover:text-red-300">
+                    <Trash2 class="w-4 h-4" />
+                  </button>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <template v-for="(propDef, propKey) in varDef.properties" :key="propKey">
+                    <div>
+                      <label class="block text-xs text-slate-400 mb-1">{{ propDef.label || propKey }}</label>
+                      <input
+                        v-model="item[propKey]"
+                        type="text"
+                        :placeholder="propDef.label || ''"
+                        class="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Preview Generated Config -->
+        <div>
+          <h3 class="font-medium text-cyan-400 mb-2">Generated Configuration</h3>
+          <pre class="p-4 bg-slate-900 rounded-lg text-xs font-mono overflow-auto max-h-64 whitespace-pre-wrap text-green-400">{{ generatedApplyConfig }}</pre>
+        </div>
+
+        <!-- Select Router -->
+        <div>
+          <label class="block text-sm font-medium mb-2">Select Router to Apply</label>
+          <select 
+            v-model="applyRouterId"
+            class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option :value="null">-- Select a router --</option>
+            <option 
+              v-for="r in routerStore.routers.filter(r => r.vendor === applyingTemplate.vendor)" 
+              :key="r.id" 
+              :value="r.id"
+            >
+              {{ r.hostname }} ({{ r.ip_address }})
+            </option>
+          </select>
+          <p v-if="!routerStore.routers.filter(r => r.vendor === applyingTemplate.vendor).length" class="text-xs text-amber-400 mt-1">
+            No routers found with vendor: {{ applyingTemplate.vendor }}
+          </p>
+        </div>
+      </div>
+
+      <template #footer>
+        <AppButton variant="ghost" @click="showApplyModal = false">Cancel</AppButton>
+        <AppButton 
+          variant="success" 
+          :loading="applyingConfig" 
+          :disabled="!applyRouterId"
+          @click="handleApplyTemplateConfig"
+        >
+          <Send class="w-4 h-4" />
+          Apply Configuration
         </AppButton>
       </template>
     </Modal>
