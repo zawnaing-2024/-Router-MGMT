@@ -1,9 +1,8 @@
 from app.core.database import SessionLocal
-from app.models import ConfigTemplate, TemplateCategory, VendorEnum
+from app.models import ConfigTemplate, TemplateCategory
 
 db = SessionLocal()
 
-# Check if builtin templates already exist
 existing = db.query(ConfigTemplate).filter(ConfigTemplate.is_builtin == True).count()
 if existing > 0:
     print(f'Builtin templates already exist ({existing})')
@@ -15,7 +14,7 @@ templates_data = [
         'name': 'Basic OSPF Area 0',
         'description': 'Basic OSPF configuration for area 0 with network advertisement',
         'category': TemplateCategory.OSPF,
-        'vendor': VendorEnum.CISCO_IOS,
+        'vendor': 'cisco_ios',
         'content': """!
 ! OSPF Configuration Template
 !
@@ -35,7 +34,7 @@ router ospf {{process_id}}
         'name': 'MikroTik OSPF',
         'description': 'OSPF configuration for MikroTik RouterOS',
         'category': TemplateCategory.OSPF,
-        'vendor': VendorEnum.MIKROTIK_ROUTEROS,
+        'vendor': 'mikrotik_routeros',
         'content': """# OSPF Configuration for MikroTik
 
 /routing ospf instance
@@ -55,7 +54,7 @@ add area={{area}} network={{network}}
         'name': 'Basic BGP Peer',
         'description': 'Basic BGP configuration with a single peer',
         'category': TemplateCategory.BGP,
-        'vendor': VendorEnum.CISCO_IOS,
+        'vendor': 'cisco_ios',
         'content': """!
 ! BGP Configuration Template
 !
@@ -80,7 +79,7 @@ router bgp {{asn}}
         'name': 'Access Port VLAN',
         'description': 'Configure access port with VLAN assignment',
         'category': TemplateCategory.VLAN,
-        'vendor': VendorEnum.CISCO_IOS,
+        'vendor': 'cisco_ios',
         'content': """!
 ! VLAN Configuration - Access Port
 !
@@ -99,7 +98,7 @@ interface {{interface}}
         'name': 'MikroTik VLAN Bridge',
         'description': 'Create VLAN on bridge interface for MikroTik',
         'category': TemplateCategory.VLAN,
-        'vendor': VendorEnum.MIKROTIK_ROUTEROS,
+        'vendor': 'mikrotik_routeros',
         'content': """# VLAN Configuration for MikroTik
 
 /interface vlan
@@ -114,7 +113,7 @@ add address={{ip_address}}/{{prefix}} interface=vlan{{vlan_id}}
         'name': 'Basic ACL Firewall',
         'description': 'Standard access control list for firewall',
         'category': TemplateCategory.FIREWALL,
-        'vendor': VendorEnum.CISCO_IOS,
+        'vendor': 'cisco_ios',
         'content': """!
 ! Firewall ACL Configuration
 !
@@ -133,7 +132,7 @@ interface {{interface}}
         'name': 'MikroTik Firewall Filter',
         'description': 'Basic firewall filter rules for MikroTik',
         'category': TemplateCategory.FIREWALL,
-        'vendor': VendorEnum.MIKROTIK_ROUTEROS,
+        'vendor': 'mikrotik_routeros',
         'content': """# Firewall Filter Rules for MikroTik
 
 /ip firewall filter
@@ -151,7 +150,7 @@ add chain=input action=drop in-interface={{wan_interface}} comment="Drop WAN inp
         'name': 'PAT NAT Configuration',
         'description': 'Port Address Translation (many-to-one NAT)',
         'category': TemplateCategory.NAT,
-        'vendor': VendorEnum.CISCO_IOS,
+        'vendor': 'cisco_ios',
         'content': """!
 ! NAT Configuration (PAT)
 !
@@ -172,7 +171,7 @@ access-list {{acl_number}} permit {{source_network}} {{wildcard}}
         'name': 'MikroTik NAT Masquerade',
         'description': 'Source NAT (masquerade) for MikroTik',
         'category': TemplateCategory.NAT,
-        'vendor': VendorEnum.MIKROTIK_ROUTEROS,
+        'vendor': 'mikrotik_routeros',
         'content': """# NAT Configuration for MikroTik
 
 /ip firewall nat
@@ -184,7 +183,7 @@ add chain=srcnat out-interface={{wan_interface}} action=masquerade comment="MASQ
         'name': 'IPSec Site-to-Site VPN',
         'description': 'Basic IPSec site-to-site VPN configuration',
         'category': TemplateCategory.VPN,
-        'vendor': VendorEnum.CISCO_IOS,
+        'vendor': 'cisco_ios',
         'content': """!
 ! IPSec Site-to-Site VPN Configuration
 !
@@ -216,7 +215,7 @@ access-list {{acl_name}} permit ip {{local_network}} {{local_wildcard}} {{remote
         'name': 'Traffic Shaping QoS',
         'description': 'Quality of Service with traffic shaping',
         'category': TemplateCategory.QOS,
-        'vendor': VendorEnum.CISCO_IOS,
+        'vendor': 'cisco_ios',
         'content': """!
 ! QoS Configuration
 !
@@ -239,7 +238,7 @@ interface {{interface}}
         'name': 'Basic Interface IP',
         'description': 'Configure IP address on an interface',
         'category': TemplateCategory.INTERFACE,
-        'vendor': VendorEnum.CISCO_IOS,
+        'vendor': 'cisco_ios',
         'content': """!
 ! Interface Configuration
 !
@@ -255,7 +254,7 @@ interface {{interface}}
         'name': 'Interface with Speed/Duplex',
         'description': 'Configure interface with speed and duplex settings',
         'category': TemplateCategory.INTERFACE,
-        'vendor': VendorEnum.CISCO_IOS,
+        'vendor': 'cisco_ios',
         'content': """!
 ! Interface Configuration with Speed/Duplex
 !
@@ -279,7 +278,7 @@ interface {{interface}}
         'name': 'Interface Port-Channel',
         'description': 'Configure LACP port-channel interface',
         'category': TemplateCategory.INTERFACE,
-        'vendor': VendorEnum.CISCO_IOS,
+        'vendor': 'cisco_ios',
         'content': """!
 ! Port-Channel Interface Configuration
 !
@@ -300,7 +299,7 @@ interface {{member}}
         'name': 'MikroTik Interface IP',
         'description': 'Configure IP address on MikroTik interface',
         'category': TemplateCategory.INTERFACE,
-        'vendor': VendorEnum.MIKROTIK_ROUTEROS,
+        'vendor': 'mikrotik_routeros',
         'content': """# Interface Configuration for MikroTik
 
 /interface
@@ -315,7 +314,7 @@ add address={{ip_address}}/{{prefix}} interface={{interface}} comment="{{descrip
         'name': 'MikroTik Bridge Interface',
         'description': 'Create and configure bridge interface',
         'category': TemplateCategory.INTERFACE,
-        'vendor': VendorEnum.MIKROTIK_ROUTEROS,
+        'vendor': 'mikrotik_routeros',
         'content': """# Bridge Interface Configuration for MikroTik
 
 /interface bridge
@@ -335,7 +334,7 @@ add address={{ip_address}}/{{prefix}} interface={{bridge_name}}
         'name': 'MikroTik Bonding Interface',
         'description': 'Configure LACP bonding interface',
         'category': TemplateCategory.INTERFACE,
-        'vendor': VendorEnum.MIKROTIK_ROUTEROS,
+        'vendor': 'mikrotik_routeros',
         'content': """# Bonding Interface Configuration for MikroTik
 
 /interface bonding
@@ -345,6 +344,94 @@ add name={{bond_name}} slaves={{slaves}} mode={{mode}} comment="{{description}}"
 add address={{ip_address}}/{{prefix}} interface={{bond_name}}
 """,
         'variables': {'bond_name': 'bond1', 'slaves': 'ether1,ether2', 'mode': '802.3ad', 'description': 'LACP Trunk', 'ip_address': '10.0.0.1', 'prefix': '30'}
+    },
+    {
+        'name': 'FRR BGP Configuration',
+        'description': 'BGP configuration for FRR Linux router',
+        'category': TemplateCategory.BGP,
+        'vendor': 'frr_linux',
+        'content': """router bgp {{ as_number }}
+  bgp router-id {{ router_id }}
+  !
+  {% for neighbor in neighbors %}
+  neighbor {{ neighbor.ip }} remote-as {{ neighbor.as }}
+  {% if neighbor.password %}
+  neighbor {{ neighbor.ip }} password {{ neighbor.password }}
+  {% endif %}
+  {% endfor %}
+  !
+  address-family ipv4 unicast
+  {% for neighbor in neighbors %}
+    neighbor {{ neighbor.ip }} activate
+  {% endfor %}
+  exit-address-family
+""",
+        'variables': {'as_number': '65001', 'router_id': '10.0.0.1', 'neighbors': []}
+    },
+    {
+        'name': 'FRR SD-WAN VRF',
+        'description': 'VRF configuration for SD-WAN style network',
+        'category': TemplateCategory.ROUTING,
+        'vendor': 'frr_linux',
+        'content': """vrf {{ vrf_name }}
+ description {{ description }}
+ rd {{ rd }}
+ route-target import {{ rt_import }}
+ route-target export {{ rt_export }}
+!""",
+        'variables': {'vrf_name': 'CUSTOMER_A', 'description': 'Customer A VRF', 'rd': '65001:100', 'rt_import': '65001:100', 'rt_export': '65001:100'}
+    },
+    {
+        'name': 'FRR SD-WAN BGP VPNv4',
+        'description': 'BGP VPNv4 for SD-WAN overlay',
+        'category': TemplateCategory.BGP,
+        'vendor': 'frr_linux',
+        'content': """router bgp {{ as_number }}
+  bgp router-id {{ router_id }}
+  !
+  address-family vpnv4 unicast
+  neighbor {{ neighbor_ip }} activate
+  neighbor {{ neighbor_ip }} send-community both
+  exit-address-family
+  !
+  address-family ipv4 vrf {{ vrf_name }}
+  redistribute connected
+  redistribute static
+  exit-address-family
+""",
+        'variables': {'as_number': '65001', 'router_id': '10.0.0.1', 'neighbor_ip': '10.0.0.2', 'vrf_name': 'CUSTOMER_A'}
+    },
+    {
+        'name': 'FRR SD-WAN Overlay',
+        'description': 'Complete SD-WAN overlay configuration',
+        'category': TemplateCategory.BGP,
+        'vendor': 'frr_linux',
+        'content': """!
+! SD-WAN Overlay Configuration
+!
+bfd
+!
+mpls ldp
+!
+router bgp {{ as_number }}
+  bgp router-id {{ router_id }}
+  !
+  neighbor {{ overlay_neighbor }} remote-as {{ as_number }}
+  neighbor {{ overlay_neighbor }} update-source lo
+  neighbor {{ overlay_neighbor }} bfd
+  !
+  address-family vpnv4 unicast
+    neighbor {{ overlay_neighbor }} activate
+    neighbor {{ overlay_neighbor }} route-reflector-client
+    neighbor {{ overlay_neighbor }} send-community both
+  exit-address-family
+  !
+  address-family ipv4 vrf {{ vrf_name }}
+    redistribute connected
+    redistribute static
+  exit-address-family
+""",
+        'variables': {'as_number': '65001', 'router_id': '10.0.0.1', 'overlay_neighbor': '10.0.0.2', 'vrf_name': 'CUSTOMER_A'}
     }
 ]
 
