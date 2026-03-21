@@ -1,0 +1,12 @@
+[tool.poetry]
+name = "router-mgmt-backend"
+version = "0.1.0"
+description = "Router Automation & Management Portal API"
+authors = ["Network Engineer"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
