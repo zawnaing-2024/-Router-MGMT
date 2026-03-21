@@ -153,7 +153,7 @@ def get_log_command(vendor: str) -> str:
     elif "vyos" in vendor_lower:
         return "show log"
     elif "frr" in vendor_lower:
-        return "vtysh -c 'show log'"
+        return "sudo vtysh -c 'show log'"
     else:
         return "show log"
 

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useTemplateStore, useRouterStore } from '@/stores'
-import { Plus, Edit2, Trash2, Play, Search, Sparkles, Copy, Route, Globe, Network, Gauge, Shield, RefreshCw, ArrowRight, Lock, Wifi, Key, MoreHorizontal, X, Server, Cable, Send, Terminal, CheckCircle, XCircle } from 'lucide-vue-next'
+import { Plus, Edit2, Trash2, Play, Search, Sparkles, Copy, Route, Globe, Network, Gauge, Shield, RefreshCw, ArrowRight, Lock, Wifi, Key, MoreHorizontal, X, Server, Cable, Send, Terminal, CheckCircle, XCircle, Wand2, Check } from 'lucide-vue-next'
 import PageHeader from '@/components/PageHeader.vue'
 import Modal from '@/components/Modal.vue'
 import AppButton from '@/components/AppButton.vue'
+import VisualTemplateEditor from '@/components/VisualTemplateEditor.vue'
 import type { ConfigTemplate, Vendor, TemplateCategory, AISuggestion } from '@/types'
 import { templateApi, PromptGenerateResult, ApplyConfigResult } from '@/api'
 
@@ -19,11 +20,19 @@ const showEditModal = ref(false)
 const showPreviewModal = ref(false)
 const showAISuggestModal = ref(false)
 const showPromptModal = ref(false)
+const showVisualEditor = ref(false)
+const showGeneratedConfig = ref(false)
+const generatedConfig = ref('')
+const selectedRouterForPushId = ref<number | null>(null)
+const selectedRouterForPush = computed(() => 
+  routerStore.routers.find(r => r.id === selectedRouterForPushId.value)
+)
 const editingTemplate = ref<ConfigTemplate | null>(null)
 const previewContent = ref('')
 const previewVars = ref<Record<string, string>>({})
 const loading = ref(false)
 const aiLoading = ref(false)
+const pushingConfig = ref(false)
 const aiSuggestion = ref<AISuggestion | null>(null)
 
 const promptForm = ref({
@@ -43,6 +52,122 @@ const form = ref({
   content: '',
   variables: {} as Record<string, any>
 })
+
+// Visual Editor State
+interface VariableRow {
+  name: string
+  type: 'string' | 'number' | 'boolean'
+  label: string
+  required: boolean
+  defaultValue: string
+  description: string
+  options?: string
+}
+
+interface ConfigLine {
+  id: number
+  text: string
+  indent: string
+}
+
+const visualForm = ref({
+  name: '',
+  description: '',
+  category: 'bgp' as TemplateCategory,
+  vendor: 'frr_linux' as Vendor
+})
+
+const configLines = ref<ConfigLine[]>([
+  { id: 1, text: 'router bgp {{ as_number }}', indent: '' },
+  { id: 2, text: 'bgp router-id {{ router_id }}', indent: '  ' },
+  { id: 3, text: '!', indent: '' }
+])
+
+const variables = ref<VariableRow[]>([
+  { name: 'as_number', type: 'number', label: 'AS Number', required: true, defaultValue: '65001', description: 'Autonomous System Number' },
+  { name: 'router_id', type: 'string', label: 'Router ID', required: true, defaultValue: '10.0.0.1', description: 'BGP Router ID' }
+])
+
+const generatedContent = computed(() => {
+  let content = ''
+  for (const line of configLines.value) {
+    content += line.indent + line.text + '\n'
+  }
+  return content
+})
+
+const generatedVariables = computed(() => {
+  const vars: Record<string, any> = {}
+  for (const v of variables.value) {
+    vars[v.name] = {
+      type: v.type,
+      label: v.label,
+      required: v.required,
+      default: v.defaultValue || undefined,
+      description: v.description || undefined,
+      ...(v.options ? { options: v.options.split(',').map(o => o.trim()) } : {})
+    }
+  }
+  return vars
+})
+
+function addConfigLine() {
+  configLines.value.push({
+    id: Date.now(),
+    text: '',
+    indent: '  '
+  })
+}
+
+function removeConfigLine(id: number) {
+  configLines.value = configLines.value.filter(l => l.id !== id)
+}
+
+function addVariable() {
+  variables.value.push({
+    name: '',
+    type: 'string',
+    label: '',
+    required: false,
+    defaultValue: '',
+    description: ''
+  })
+}
+
+function removeVariable(index: number) {
+  variables.value.splice(index, 1)
+}
+
+function saveVisualTemplate() {
+  form.value.name = visualForm.value.name
+  form.value.description = visualForm.value.description
+  form.value.category = visualForm.value.category
+  form.value.vendor = visualForm.value.vendor
+  form.value.content = generatedContent.value
+  form.value.variables = generatedVariables.value
+  
+  handleAddTemplate()
+  showVisualEditor.value = false
+  resetVisualForm()
+}
+
+function resetVisualForm() {
+  visualForm.value = {
+    name: '',
+    description: '',
+    category: 'bgp',
+    vendor: 'frr_linux'
+  }
+  configLines.value = [
+    { id: 1, text: 'router bgp {{ as_number }}', indent: '' },
+    { id: 2, text: '  bgp router-id {{ router_id }}', indent: '  ' },
+    { id: 3, text: '!', indent: '' }
+  ]
+  variables.value = [
+    { name: 'as_number', type: 'number', label: 'AS Number', required: true, defaultValue: '65001', description: 'Autonomous System Number' },
+    { name: 'router_id', type: 'string', label: 'Router ID', required: true, defaultValue: '10.0.0.1', description: 'BGP Router ID' }
+  ]
+}
 
 const aiForm = ref({
   category: 'ospf' as TemplateCategory,
@@ -128,6 +253,48 @@ async function handleAddTemplate() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+async function handleVisualSave(data: any) {
+  loading.value = true
+  try {
+    form.value = {
+      name: data.name,
+      description: data.description,
+      category: data.category as TemplateCategory,
+      vendor: data.vendor as Vendor,
+      content: data.content,
+      variables: data.variables
+    }
+    const result = await templateStore.createTemplate(form.value)
+    if (result) {
+      showVisualEditor.value = false
+      showGeneratedConfig.value = true
+      generatedConfig.value = data.content
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+async function pushConfigToRouter() {
+  if (!selectedRouterForPushId.value) return
+  
+  pushingConfig.value = true
+  try {
+    const result = await routerStore.executeCommand(selectedRouterForPushId.value, generatedConfig.value)
+    if (result.success) {
+      alert('Configuration pushed successfully!')
+      showGeneratedConfig.value = false
+      selectedRouterForPushId.value = null
+    } else {
+      alert('Error: ' + result.output)
+    }
+  } catch (e: any) {
+    alert('Error: ' + e.message)
+  } finally {
+    pushingConfig.value = false
   }
 }
 
@@ -331,6 +498,10 @@ onMounted(async () => {
           <AppButton @click="showAddModal = true">
             <Plus class="w-4 h-4" />
             New Template
+          </AppButton>
+          <AppButton @click="showVisualEditor = true" variant="success">
+            <Wand2 class="w-4 h-4" />
+            Visual Builder
           </AppButton>
         </div>
       </template>
@@ -681,6 +852,56 @@ onMounted(async () => {
       </div>
       <template #footer>
         <AppButton variant="ghost" @click="showPromptModal = false; resetPromptForm()">Close</AppButton>
+      </template>
+    </Modal>
+
+    <!-- Visual Template Editor Modal -->
+    <VisualTemplateEditor 
+      :open="showVisualEditor" 
+      @close="showVisualEditor = false"
+      @save="handleVisualSave"
+    />
+
+    <!-- Generated Config Preview & Push Modal -->
+    <Modal :open="showGeneratedConfig" title="Generated Configuration" size="xl" @close="showGeneratedConfig = false">
+      <div class="space-y-4">
+        <div class="bg-slate-900 p-4 rounded-lg">
+          <pre class="text-xs font-mono whitespace-pre-wrap text-green-400">{{ generatedConfig }}</pre>
+        </div>
+        
+        <div v-if="selectedRouterForPush" class="p-4 bg-slate-700 rounded-lg">
+          <p class="text-sm text-slate-300 mb-2">
+            Ready to push to: <span class="font-bold text-white">{{ selectedRouterForPush.hostname }}</span>
+            ({{ selectedRouterForPush.ip_address }})
+          </p>
+          <p class="text-xs text-slate-400">Vendor: {{ selectedRouterForPush.vendor }}</p>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium mb-2">Select Router to Push</label>
+          <select 
+            v-model="selectedRouterForPushId"
+            class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg"
+          >
+            <option :value="null">-- Select a router --</option>
+            <option v-for="r in routerStore.routers" :key="r.id" :value="r.id">
+              {{ r.hostname }} ({{ r.ip_address }})
+            </option>
+          </select>
+        </div>
+      </div>
+      
+      <template #footer>
+        <AppButton variant="ghost" @click="showGeneratedConfig = false">Cancel</AppButton>
+        <AppButton 
+          variant="success" 
+          :loading="pushingConfig" 
+          :disabled="!selectedRouterForPushId"
+          @click="pushConfigToRouter"
+        >
+          <Send class="w-4 h-4" />
+          Push to Router
+        </AppButton>
       </template>
     </Modal>
   </div>

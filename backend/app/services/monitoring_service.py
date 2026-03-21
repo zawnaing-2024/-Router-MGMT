@@ -205,7 +205,7 @@ class MonitoringService:
                         metrics['uptime_seconds'] = self._parse_uptime(uptime_str)
 
         success, mem_out, _ = self.ssh.execute_command(
-            "vtysh -c 'show memory'",
+            "sudo vtysh -c 'show memory'",
             timeout=10
         )
         
