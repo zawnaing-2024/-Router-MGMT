@@ -172,7 +172,8 @@ def get_device_logs(router_id: int, lines: int = Query(100, ge=10, le=1000), db:
             port=router.port,
             username=router.username,
             password=password,
-            ssh_key=router.ssh_key
+            ssh_key=router.ssh_key,
+            sudo_password=decrypt_password(router.sudo_password_encrypted) if router.sudo_password_encrypted else None
         )
         
         success, conn_msg = ssh.connect()
@@ -180,7 +181,11 @@ def get_device_logs(router_id: int, lines: int = Query(100, ge=10, le=1000), db:
             return {"success": False, "error": f"Connection failed: {conn_msg}", "logs": ""}
         
         log_cmd = get_log_command(router.vendor)
-        success, output, error = ssh.execute_command(log_cmd)
+        
+        if "frr" in router.vendor.lower() and ssh.sudo_password:
+            success, output, error = ssh.execute_with_sudo(log_cmd.replace("sudo ", ""))
+        else:
+            success, output, error = ssh.execute_command(log_cmd)
         ssh.close()
         
         if success:

@@ -60,6 +60,7 @@ class RouterBase(BaseModel):
     username: str = Field(..., min_length=1, max_length=128)
     password: Optional[str] = None
     ssh_key: Optional[str] = None
+    sudo_password: Optional[str] = None
     location: Optional[str] = None
     tags: list[str] = []
     notes: Optional[str] = None
@@ -77,6 +78,7 @@ class RouterUpdate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     ssh_key: Optional[str] = None
+    sudo_password: Optional[str] = None
     location: Optional[str] = None
     tags: Optional[list[str]] = None
     notes: Optional[str] = None

@@ -7,12 +7,13 @@ from app.core.security import decrypt_password
 
 
 class SSHService:
-    def __init__(self, host: str, port: int, username: str, password: Optional[str] = None, ssh_key: Optional[str] = None):
+    def __init__(self, host: str, port: int, username: str, password: Optional[str] = None, ssh_key: Optional[str] = None, sudo_password: Optional[str] = None):
         self.host = host
         self.port = port
         self.username = username
         self.password = password
         self.ssh_key = ssh_key
+        self.sudo_password = sudo_password
         self.client: Optional[paramiko.SSHClient] = None
     
     def connect(self) -> Tuple[bool, str]:
@@ -48,6 +49,21 @@ class SSHService:
         
         try:
             stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
+            output = stdout.read().decode("utf-8", errors="replace")
+            error = stderr.read().decode("utf-8", errors="replace")
+            exit_status = stdout.channel.recv_exit_status()
+            
+            return exit_status == 0, output, error
+        except Exception as e:
+            return False, "", str(e)
+    
+    def execute_with_sudo(self, command: str, timeout: int = 30) -> Tuple[bool, str, str]:
+        if not self.client:
+            return False, "", "Not connected"
+        
+        try:
+            full_command = f"echo '{self.sudo_password}' | sudo -S {command}"
+            stdin, stdout, stderr = self.client.exec_command(full_command, timeout=timeout)
             output = stdout.read().decode("utf-8", errors="replace")
             error = stderr.read().decode("utf-8", errors="replace")
             exit_status = stdout.channel.recv_exit_status()

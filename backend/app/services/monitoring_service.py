@@ -185,8 +185,8 @@ class MonitoringService:
     def _collect_frr(self) -> Dict[str, Any]:
         metrics = {}
 
-        success, version_out, _ = self.ssh.execute_command(
-            "sudo vtysh -c 'show version'",
+        success, version_out, _ = self.ssh.execute_with_sudo(
+            "vtysh -c 'show version'",
             timeout=10
         )
         
@@ -204,8 +204,8 @@ class MonitoringService:
                         uptime_str = parts[1].strip()
                         metrics['uptime_seconds'] = self._parse_uptime(uptime_str)
 
-        success, mem_out, _ = self.ssh.execute_command(
-            "sudo vtysh -c 'show memory'",
+        success, mem_out, _ = self.ssh.execute_with_sudo(
+            "vtysh -c 'show memory'",
             timeout=10
         )
         

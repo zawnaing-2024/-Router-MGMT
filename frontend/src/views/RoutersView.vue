@@ -26,6 +26,7 @@ const form = ref({
   username: '',
   password: '',
   ssh_key: '',
+  sudo_password: '',
   location: '',
   tags: [] as string[],
   notes: ''
@@ -368,6 +369,16 @@ onMounted(() => {
             type="text"
             class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Sudo Password (for FRR vtysh)</label>
+          <input
+            v-model="form.sudo_password"
+            type="password"
+            placeholder="Required for FRR Linux"
+            class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p class="text-xs text-slate-400 mt-1">Needed for FRR routers to access vtysh</p>
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">Notes</label>

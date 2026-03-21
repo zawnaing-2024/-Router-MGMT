@@ -12,6 +12,7 @@ export interface Router {
   username: string
   password?: string
   ssh_key?: string
+  sudo_password?: string
   location?: string
   tags: string[]
   notes?: string

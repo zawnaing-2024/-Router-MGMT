@@ -49,6 +49,7 @@ class Router(Base):
     username = Column(String(128), nullable=False)
     password_encrypted = Column(Text, nullable=False)
     ssh_key = Column(Text, nullable=True)
+    sudo_password_encrypted = Column(Text, nullable=True)
     location = Column(String(255), nullable=True)
     tags = Column(JSON, default=list)
     status = Column(Enum(RouterStatus), default=RouterStatus.UNKNOWN)

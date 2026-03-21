@@ -81,6 +81,7 @@ def create_router(router_data: RouterCreate, db: Session = Depends(get_db)):
         username=router_data.username,
         password_encrypted=encrypt_password(router_data.password) if router_data.password else "",
         ssh_key=router_data.ssh_key,
+        sudo_password_encrypted=encrypt_password(router_data.sudo_password) if router_data.sudo_password else None,
         location=router_data.location,
         tags=router_data.tags,
         notes=router_data.notes,
@@ -125,8 +126,15 @@ def update_router(router_id: int, router_data: RouterUpdate, db: Session = Depen
     elif "password" in update_data:
         update_data.pop("password")
     
+    if "sudo_password" in update_data:
+        if update_data["sudo_password"]:
+            router.sudo_password_encrypted = encrypt_password(update_data.pop("sudo_password"))
+        else:
+            router.sudo_password_encrypted = None
+            update_data.pop("sudo_password")
+    
     for key, value in update_data.items():
-        if key not in ("password_encrypted", "password"):
+        if key not in ("password_encrypted", "password", "sudo_password_encrypted", "sudo_password"):
             setattr(router, key, value)
     
     router.updated_at = datetime.utcnow()
