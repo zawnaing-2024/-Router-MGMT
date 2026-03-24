@@ -29,7 +29,7 @@ api.interceptors.response.use(
 )
 
 export const routerApi = {
-  list: (params?: { skip?: number; limit?: number; vendor?: string; status?: string; search?: string }) =>
+  list: (params?: { skip?: number; limit?: number; vendor?: string; status?: string; search?: string; project_id?: number; group_id?: number }) =>
     api.get<Router[]>('/routers', { params }),
 
   get: (id: number) =>

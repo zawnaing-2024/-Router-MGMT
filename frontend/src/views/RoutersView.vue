@@ -1,22 +1,47 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouterStore, useMetricsStore } from '@/stores'
-import { Plus, Search, RefreshCw, Trash2, Edit2, Terminal, Download, Cpu, HardDrive, Clock, Tag, FileDown } from 'lucide-vue-next'
+import { Plus, Search, RefreshCw, Trash2, Edit2, Terminal, Download, Cpu, HardDrive, Clock, Tag, FileDown, Folder } from 'lucide-vue-next'
 import PageHeader from '@/components/PageHeader.vue'
 import Modal from '@/components/Modal.vue'
 import AppButton from '@/components/AppButton.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
-import type { Router, Vendor } from '@/types'
+import { routerGroupApi } from '@/api'
+import type { Router, Vendor, RouterGroup } from '@/types'
 
 const routerStore = useRouterStore()
 const metricsStore = useMetricsStore()
 
 const searchQuery = ref('')
 const selectedVendor = ref('')
+const selectedGroup = ref<number | ''>('')
+const groups = ref<RouterGroup[]>([])
 const showAddModal = ref(false)
 const showEditModal = ref(false)
 const editingRouter = ref<Router | null>(null)
 const loading = ref(false)
+
+async function loadGroups() {
+  try {
+    const res = await routerGroupApi.list()
+    groups.value = res.data
+  } catch (e) {
+    console.error('Failed to load groups', e)
+  }
+}
+
+async function loadRouters() {
+  loading.value = true
+  try {
+    await routerStore.fetchRouters({
+      search: searchQuery.value || undefined,
+      vendor: selectedVendor.value || undefined,
+      group_id: selectedGroup.value ? Number(selectedGroup.value) : undefined
+    })
+  } finally {
+    loading.value = false
+  }
+}
 
 function exportToCSV() {
   const headers = ['ID', 'Hostname', 'IP Address', 'Port', 'Vendor', 'Status', 'Location', 'Uptime', 'Last Seen']
@@ -189,6 +214,7 @@ function resetForm() {
 
 onMounted(() => {
   loadRouters()
+  loadGroups()
 })
 </script>
 
@@ -212,6 +238,14 @@ onMounted(() => {
           >
             <option value="">All Vendors</option>
             <option v-for="v in vendors" :key="v.value" :value="v.value">{{ v.label }}</option>
+          </select>
+          <select
+            v-model="selectedGroup"
+            @change="loadRouters"
+            class="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option :value="''">All Groups</option>
+            <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
           </select>
           <AppButton @click="loadRouters" variant="ghost" size="sm">
             <RefreshCw class="w-4 h-4" />

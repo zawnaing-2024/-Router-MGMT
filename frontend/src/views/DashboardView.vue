@@ -1,12 +1,21 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouterStore, useMetricsStore } from '@/stores'
-import { Server, CheckCircle, XCircle, AlertTriangle, Database, Clock, AlertCircle, Activity, RefreshCw, Cpu, HardDrive } from 'lucide-vue-next'
+import { Server, CheckCircle, XCircle, AlertTriangle, Database, Clock, AlertCircle, Activity, RefreshCw, Cpu, HardDrive, Gauge, FileText, Bell, Settings } from 'lucide-vue-next'
 import PageHeader from '@/components/PageHeader.vue'
 import AppButton from '@/components/AppButton.vue'
 
 const routerStore = useRouterStore()
 const metricsStore = useMetricsStore()
+
+const showWidgetSettings = ref(false)
+
+const widgets = ref([
+  { id: 'stats', label: 'Router Stats', enabled: true },
+  { id: 'recent_backups', label: 'Recent Backups', enabled: true },
+  { id: 'jobs', label: 'Scheduled Jobs', enabled: true },
+  { id: 'alerts', label: 'Alerts', enabled: true },
+])
 
 const stats = ref([
   { label: 'Total Routers', value: 0, icon: Server, color: 'text-blue-400', bg: 'bg-blue-500/20' },
@@ -15,12 +24,7 @@ const stats = ref([
   { label: 'Warning', value: 0, icon: AlertTriangle, color: 'text-amber-400', bg: 'bg-amber-500/20' },
 ])
 
-const recentBackups = ref([
-  { router: 'Router-01', time: '5 min ago', status: 'success' },
-  { router: 'Router-02', time: '15 min ago', status: 'success' },
-  { router: 'Router-03', time: '1 hour ago', status: 'failed' },
-  { router: 'Router-04', time: '2 hours ago', status: 'success' },
-])
+const recentBackups = ref<any[]>([])
 
 const refreshing = ref(false)
 
@@ -73,6 +77,10 @@ onUnmounted(() => {
   <div>
     <PageHeader title="Dashboard" subtitle="Network overview and quick actions">
       <template #actions>
+        <AppButton @click="showWidgetSettings = !showWidgetSettings" variant="ghost" size="sm">
+          <Settings class="w-4 h-4" />
+          Widgets
+        </AppButton>
         <AppButton @click="refreshData" variant="ghost" size="sm" :loading="refreshing">
           <RefreshCw class="w-4 h-4" />
           Refresh
@@ -80,8 +88,17 @@ onUnmounted(() => {
       </template>
     </PageHeader>
 
+    <div v-if="showWidgetSettings" class="p-4 bg-slate-800 border-b border-slate-700">
+      <div class="flex flex-wrap gap-3">
+        <label v-for="w in widgets" :key="w.id" class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" v-model="w.enabled" class="rounded" />
+          <span class="text-sm">{{ w.label }}</span>
+        </label>
+      </div>
+    </div>
+
     <div class="p-6 space-y-6">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div v-if="widgets.find(w => w.id === 'stats')?.enabled" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
           v-for="stat in stats"
           :key="stat.label"
@@ -100,7 +117,7 @@ onUnmounted(() => {
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-slate-800 rounded-xl border border-slate-700">
+        <div v-if="widgets.find(w => w.id === 'recent_backups')?.enabled" class="bg-slate-800 rounded-xl border border-slate-700">
           <div class="p-4 border-b border-slate-700 flex items-center justify-between">
             <h3 class="font-semibold">Recent Backups</h3>
             <router-link to="/backups" class="text-blue-400 text-sm hover:underline">View all</router-link>

@@ -271,3 +271,47 @@ def check_config_changes(router_id: int, db: Session = Depends(get_db)):
         }
     except Exception as e:
         return {"has_changes": None, "message": str(e)}
+
+
+@router.get("/config-drift-summary")
+def get_config_drift_summary(authorization: str = Header(None), db: Session = Depends(get_db)):
+    from app.models import User
+    user = get_user_from_token(authorization)
+    
+    if not user:
+        return []
+    
+    router_query = db.query(Router)
+    if user.role.lower() != "admin":
+        conditions = []
+        if user.router_ids:
+            conditions.append(Router.id.in_(user.router_ids))
+        if user.project_id:
+            conditions.append(Router.project_id == user.project_id)
+        
+        if conditions:
+            router_query = router_query.filter(or_(*conditions))
+        else:
+            return []
+    
+    routers = router_query.all()
+    results = []
+    
+    for router in routers:
+        latest_backup = db.query(ConfigBackup).filter(
+            ConfigBackup.router_id == router.id
+        ).order_by(ConfigBackup.created_at.desc()).first()
+        
+        latest_change = db.query(ConfigChange).filter(
+            ConfigChange.router_id == router.id
+        ).order_by(ConfigChange.detected_at.desc()).first()
+        
+        results.append({
+            "router_id": router.id,
+            "hostname": router.hostname,
+            "last_backup": latest_backup.created_at.isoformat() if latest_backup else None,
+            "last_check": latest_change.detected_at.isoformat() if latest_change else None,
+            "has_drift": latest_change is not None
+        })
+    
+    return results

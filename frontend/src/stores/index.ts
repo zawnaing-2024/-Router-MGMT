@@ -9,7 +9,7 @@ export const useRouterStore = defineStore('router', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function fetchRouters(params?: { search?: string; vendor?: string; status?: string }) {
+  async function fetchRouters(params?: { search?: string; vendor?: string; status?: string; group_id?: number }) {
     loading.value = true
     error.value = null
     try {

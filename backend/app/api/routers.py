@@ -44,6 +44,28 @@ def get_user_from_token(authorization: str = None) -> Optional[User]:
         return None
 
 
+def can_manage_router(user: Optional[User], router: Router) -> bool:
+    if not user:
+        return False
+    if user.role.upper() == "ADMIN":
+        return True
+    if user.role.upper() == "MANAGER" and user.project_id:
+        return router.project_id == user.project_id
+    if user.router_ids:
+        return router.id in user.router_ids
+    return False
+
+
+def can_create_router(user: Optional[User], project_id: Optional[int] = None) -> bool:
+    if not user:
+        return False
+    if user.role.upper() == "ADMIN":
+        return True
+    if user.role.upper() == "MANAGER" and user.project_id:
+        return project_id == user.project_id
+    return False
+
+
 def log_router_event(db: Session, router_id: int, level: str, source: str, message: str, details: dict = None):
     log_entry = RouterLog(
         router_id=router_id,
@@ -64,6 +86,7 @@ def list_routers(
     status: Optional[str] = None,
     search: Optional[str] = None,
     project_id: Optional[int] = None,
+    group_id: Optional[int] = None,
     authorization: str = Header(None),
     db: Session = Depends(get_db)
 ):
@@ -84,6 +107,14 @@ def list_routers(
 
     if project_id:
         query = query.filter(Router.project_id == project_id)
+
+    if group_id:
+        from app.models import RouterGroup
+        group = db.query(RouterGroup).filter(RouterGroup.id == group_id).first()
+        if group and group.router_ids:
+            query = query.filter(Router.id.in_(group.router_ids))
+        else:
+            return []
 
     if vendor:
         query = query.filter(Router.vendor == vendor)
@@ -121,8 +152,8 @@ def get_router(router_id: int, authorization: str = Header(None), db: Session = 
 def create_router(router_data: RouterCreate, authorization: str = Header(None), db: Session = Depends(get_db)):
     user = get_user_from_token(authorization)
     
-    if user and user.role.lower() != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can create routers")
+    if not can_create_router(user, router_data.project_id):
+        raise HTTPException(status_code=403, detail="You don't have permission to create routers")
     
     existing = db.query(Router).filter(
         (Router.hostname == router_data.hostname) |
@@ -179,12 +210,12 @@ def create_router(router_data: RouterCreate, authorization: str = Header(None), 
 def update_router(router_id: int, router_data: RouterUpdate, authorization: str = Header(None), db: Session = Depends(get_db)):
     user = get_user_from_token(authorization)
     
-    if user and user.role.lower() != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can update routers")
-    
     router = db.query(Router).filter(Router.id == router_id).first()
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
+    
+    if not can_manage_router(user, router):
+        raise HTTPException(status_code=403, detail="You don't have permission to update this router")
     
     update_data = router_data.model_dump(exclude_unset=True)
     
@@ -214,24 +245,28 @@ def update_router(router_id: int, router_data: RouterUpdate, authorization: str 
 def delete_router(router_id: int, authorization: str = Header(None), db: Session = Depends(get_db)):
     user = get_user_from_token(authorization)
     
-    if user and user.role.lower() != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can delete routers")
-    
     router = db.query(Router).filter(Router.id == router_id).first()
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
+    
+    if not can_manage_router(user, router):
+        raise HTTPException(status_code=403, detail="You don't have permission to delete this router")
     
     db.delete(router)
     db.commit()
 
 
 @router.post("/{router_id}/backup")
-def trigger_backup(router_id: int, db: Session = Depends(get_db)):
+def trigger_backup(router_id: int, authorization: str = Header(None), db: Session = Depends(get_db)):
     from app.services import BackupService
     
+    user = get_user_from_token(authorization)
     router = db.query(Router).filter(Router.id == router_id).first()
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
+    
+    if not can_manage_router(user, router):
+        raise HTTPException(status_code=403, detail="You don't have permission to backup this router")
     
     backup_service = BackupService(db)
     success, message, backup = backup_service.backup_router(router_id, "manual")
@@ -245,10 +280,14 @@ def trigger_backup(router_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{router_id}/connect", response_model=ConnectionTestResponse)
-def test_router_connection(router_id: int, db: Session = Depends(get_db)):
+def test_router_connection(router_id: int, authorization: str = Header(None), db: Session = Depends(get_db)):
+    user = get_user_from_token(authorization)
     router = db.query(Router).filter(Router.id == router_id).first()
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
+    
+    if not can_manage_router(user, router):
+        raise HTTPException(status_code=403, detail="You don't have permission to test this router")
     
     try:
         password = decrypt_password(router.password_encrypted) if router.password_encrypted else None
@@ -286,16 +325,15 @@ def test_router_connection(router_id: int, db: Session = Depends(get_db)):
 def execute_command(router_id: int, cmd_data: CommandRequest, authorization: str = Header(None), db: Session = Depends(get_db)):
     user = get_user_from_token(authorization)
     
-    if user and user.role == "VIEWER":
+    if user and user.role.upper() == "VIEWER":
         raise HTTPException(status_code=403, detail="Viewers cannot execute commands")
-    
-    if user and user.role.lower() != "admin" and user.router_ids:
-        if router_id not in user.router_ids:
-            raise HTTPException(status_code=403, detail="Access denied")
     
     router = db.query(Router).filter(Router.id == router_id).first()
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
+    
+    if not can_manage_router(user, router):
+        raise HTTPException(status_code=403, detail="You don't have permission to execute commands on this router")
     
     try:
         password = decrypt_password(router.password_encrypted) if router.password_encrypted else None

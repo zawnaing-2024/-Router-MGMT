@@ -267,6 +267,7 @@ class RouterLog(Base):
 
 class UserRole(str, enum.Enum):
     ADMIN = "ADMIN"
+    MANAGER = "MANAGER"
     OPERATOR = "OPERATOR"
     VIEWER = "VIEWER"
 
@@ -284,3 +285,16 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class APIToken(Base):
+    __tablename__ = "api_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(128), nullable=False)
+    token_hash = Column(String(256), nullable=False)
+    permissions = Column(String(64), default="read")
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    last_used = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

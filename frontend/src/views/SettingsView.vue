@@ -528,6 +528,7 @@ async function importDataSubmit() {
             <label class="block text-sm text-slate-400 mb-1">Role</label>
             <select v-model="userForm.role" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2">
               <option value="ADMIN">Admin</option>
+              <option value="MANAGER">Manager</option>
               <option value="OPERATOR">Operator</option>
               <option value="VIEWER">Viewer</option>
             </select>

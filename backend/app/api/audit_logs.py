@@ -1,13 +1,30 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Header
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 
 from app.core.database import get_db
-from app.models import AuditLog
+from app.models import AuditLog, User
 from app.schemas import AuditLogResponse
+import jwt
 
 router = APIRouter(prefix="/audit-logs", tags=["Audit Logs"])
+
+SECRET_KEY = "your-secret-key-change-in-production-use-strong-random-key"
+ALGORITHM = "HS256"
+
+
+def get_user_from_token(authorization: str = None) -> Optional[User]:
+    if not authorization:
+        return None
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        db = next(get_db())
+        user = db.query(User).filter(User.id == payload.get("sub")).first()
+        return user
+    except:
+        return None
 
 
 @router.get("", response_model=List[AuditLogResponse])
@@ -19,9 +36,31 @@ def list_audit_logs(
     entity_id: Optional[int] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
+    user_id: Optional[int] = None,
+    authorization: str = Header(None),
     db: Session = Depends(get_db)
 ):
+    user = get_user_from_token(authorization)
+    
+    if not user or user.role.upper() not in ["ADMIN", "MANAGER"]:
+        return []
+    
     query = db.query(AuditLog)
+    
+    if user.role.upper() == "MANAGER":
+        from app.models import Router
+        conditions = []
+        if user.router_ids:
+            conditions.append(AuditLog.entity_id.in_(user.router_ids))
+        if user.project_id:
+            routers = db.query(Router.id).filter(Router.project_id == user.project_id).all()
+            router_ids = [r.id for r in routers]
+            conditions.append(AuditLog.entity_id.in_(router_ids))
+        if conditions:
+            from sqlalchemy import or_
+            query = query.filter(or_(*conditions))
+        else:
+            query = query.filter(AuditLog.user_id == user.id)
     
     if action:
         query = query.filter(AuditLog.action == action)
@@ -29,6 +68,8 @@ def list_audit_logs(
         query = query.filter(AuditLog.entity_type == entity_type)
     if entity_id:
         query = query.filter(AuditLog.entity_id == entity_id)
+    if user_id:
+        query = query.filter(AuditLog.user_id == user_id)
     if start_date:
         query = query.filter(AuditLog.created_at >= start_date)
     if end_date:

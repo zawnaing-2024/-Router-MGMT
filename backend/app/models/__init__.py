@@ -3,7 +3,7 @@ from app.models.models import (
     PerformanceMetric, PingMetric, RouterGroup, RemediationScript,
     NotificationChannel, Webhook, ConfigChange, RouterLog,
     VendorEnum, RouterStatus, JobType, JobStatus,
-    TemplateCategory, User, UserRole
+    TemplateCategory, User, UserRole, APIToken
 )
 
 __all__ = [
@@ -11,5 +11,5 @@ __all__ = [
     "PerformanceMetric", "PingMetric", "RouterGroup", "RemediationScript",
     "NotificationChannel", "Webhook", "ConfigChange", "RouterLog",
     "VendorEnum", "RouterStatus", "JobType", "JobStatus",
-    "TemplateCategory", "User", "UserRole"
+    "TemplateCategory", "User", "UserRole", "APIToken"
 ]

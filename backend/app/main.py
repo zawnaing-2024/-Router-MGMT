@@ -25,6 +25,7 @@ from app.api import (
     router_logs_router,
     auth_router,
     projects_router,
+    api_tokens_router,
 )
 from app.api.terminal import websocket_endpoint
 from app.api.metrics import router as metrics_router
@@ -149,6 +150,7 @@ app.include_router(notifications_router, prefix="/api")
 app.include_router(router_logs_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(projects_router, prefix="/api")
+app.include_router(api_tokens_router, prefix="/api")
 
 
 @app.get("/")
