@@ -11,6 +11,7 @@ A professional network operations center (NOC) dashboard for network engineers t
 - **Live Terminal**: Browser-based SSH terminal with xterm.js
 - **Scheduled Jobs**: Automate backup and command execution with cron-like scheduling
 - **Dashboard**: Overview of network status, recent backups, and quick actions
+- **User & Project Management**: Assign routers to users or projects for access control
 
 ## Tech Stack
 
