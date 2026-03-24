@@ -1,17 +1,35 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Header
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional
 from datetime import datetime, timedelta
 import re
 import httpx
+import jwt
 
 from app.core.database import get_db
 from app.core.security import decrypt_password
-from app.models import RouterLog, Router, NotificationChannel
+from app.models import RouterLog, Router, NotificationChannel, User
 from app.schemas import RouterLogCreate, RouterLogResponse
 from app.services import SSHService
 
 router = APIRouter(prefix="/routers", tags=["Router Logs"])
+
+SECRET_KEY = "your-secret-key-change-in-production-use-strong-random-key"
+ALGORITHM = "HS256"
+
+
+def get_user_from_token(authorization: str = None) -> Optional[User]:
+    if not authorization:
+        return None
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        db = next(get_db())
+        user = db.query(User).filter(User.id == payload.get("sub")).first()
+        return user
+    except:
+        return None
 
 
 CRITICAL_PATTERNS = [
@@ -125,9 +143,28 @@ def get_all_router_logs(
     limit: int = Query(100, ge=1, le=500),
     level: Optional[str] = None,
     hours: Optional[int] = None,
+    authorization: str = Header(None),
     db: Session = Depends(get_db)
 ):
+    user = get_user_from_token(authorization)
+    
+    if not user:
+        return []
+    
     query = db.query(RouterLog)
+    
+    if user.role.lower() != "admin":
+        router_query = db.query(Router.id)
+        if user.router_ids:
+            router_query = router_query.filter(Router.id.in_(user.router_ids))
+        if user.project_id:
+            router_query = router_query.filter(Router.project_id == user.project_id)
+        
+        if user.router_ids or user.project_id:
+            allowed_router_ids = [r.id for r in router_query.all()]
+            query = query.filter(RouterLog.router_id.in_(allowed_router_ids))
+        else:
+            return []
     
     if level:
         query = query.filter(RouterLog.level == level)

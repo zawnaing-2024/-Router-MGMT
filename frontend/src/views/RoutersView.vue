@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouterStore, useMetricsStore } from '@/stores'
-import { Plus, Search, RefreshCw, Trash2, Edit2, Terminal, Download, Cpu, HardDrive, Clock, Tag } from 'lucide-vue-next'
+import { Plus, Search, RefreshCw, Trash2, Edit2, Terminal, Download, Cpu, HardDrive, Clock, Tag, FileDown } from 'lucide-vue-next'
 import PageHeader from '@/components/PageHeader.vue'
 import Modal from '@/components/Modal.vue'
 import AppButton from '@/components/AppButton.vue'
@@ -17,6 +17,33 @@ const showAddModal = ref(false)
 const showEditModal = ref(false)
 const editingRouter = ref<Router | null>(null)
 const loading = ref(false)
+
+function exportToCSV() {
+  const headers = ['ID', 'Hostname', 'IP Address', 'Port', 'Vendor', 'Status', 'Location', 'Uptime', 'Last Seen']
+  const rows = filteredRouters.value.map(r => {
+    const metrics = metricsStore.allMetrics.find(m => m.router_id === r.id)
+    return [
+      r.id,
+      r.hostname,
+      r.ip_address,
+      r.port,
+      r.vendor,
+      r.status,
+      r.location || '',
+      formatUptime(r.uptime_seconds),
+      r.last_seen ? new Date(r.last_seen).toLocaleString() : 'Never'
+    ]
+  })
+  
+  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `routers-export-${new Date().toISOString().split('T')[0]}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 const form = ref({
   hostname: '',
@@ -189,6 +216,9 @@ onMounted(() => {
           <AppButton @click="loadRouters" variant="ghost" size="sm">
             <RefreshCw class="w-4 h-4" />
           </AppButton>
+          <AppButton @click="exportToCSV" variant="ghost" size="sm" title="Export to CSV">
+            <FileDown class="w-4 h-4" />
+          </AppButton>
           <AppButton @click="showAddModal = true">
             <Plus class="w-4 h-4" />
             Add Router
@@ -241,22 +271,20 @@ onMounted(() => {
                 </div>
               </td>
               <td class="px-4 py-3" @click.stop>
-                <div v-if="getRouterMetrics(router.id)" class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1.5">
                   <Cpu class="w-4 h-4 text-blue-400" />
-                  <span :class="['font-mono text-sm', getUsageColor(getRouterMetrics(router.id)?.cpu_percent)]">
-                    {{ getRouterMetrics(router.id)?.cpu_percent ?? '-' }}%
+                  <span :class="['font-mono text-sm', getUsageColor(getRouterMetrics(router.id)?.cpu_percent ?? 0)]">
+                    {{ getRouterMetrics(router.id)?.cpu_percent ?? 0 }}%
                   </span>
                 </div>
-                <span v-else class="text-slate-500 text-sm">-</span>
               </td>
               <td class="px-4 py-3" @click.stop>
-                <div v-if="getRouterMetrics(router.id)" class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1.5">
                   <HardDrive class="w-4 h-4 text-purple-400" />
-                  <span :class="['font-mono text-sm', getUsageColor(getRouterMetrics(router.id)?.memory_percent)]">
+                  <span :class="['font-mono text-sm', getUsageColor(getRouterMetrics(router.id)?.memory_percent ?? 0)]">
                     {{ getRouterMetrics(router.id)?.memory_percent ?? '-' }}%
                   </span>
                 </div>
-                <span v-else class="text-slate-500 text-sm">-</span>
               </td>
               <td class="px-4 py-3" @click.stop>
                 <div class="flex items-center gap-2">

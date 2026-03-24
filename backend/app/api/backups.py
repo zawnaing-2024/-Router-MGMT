@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional
+import jwt
 
 from app.core.database import get_db
-from app.models import ConfigBackup, Router
+from app.models import ConfigBackup, Router, User
 from app.schemas import (
     ConfigBackupResponse, ConfigBackupDetailResponse,
     BackupCompareRequest, BackupCompareResponse
@@ -13,15 +15,50 @@ from app.services import BackupService
 
 router = APIRouter(prefix="/backups", tags=["Backups"])
 
+SECRET_KEY = "your-secret-key-change-in-production-use-strong-random-key"
+ALGORITHM = "HS256"
+
+
+def get_user_from_token(authorization: str = None) -> Optional[User]:
+    if not authorization:
+        return None
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        db = next(get_db())
+        user = db.query(User).filter(User.id == payload.get("sub")).first()
+        return user
+    except:
+        return None
+
 
 @router.get("", response_model=List[ConfigBackupResponse])
 def list_backups(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     router_id: Optional[int] = None,
+    authorization: str = Header(None),
     db: Session = Depends(get_db)
 ):
+    user = get_user_from_token(authorization)
+    
+    if not user:
+        return []
+    
     query = db.query(ConfigBackup)
+    
+    if user.role.lower() != "admin":
+        router_query = db.query(Router.id)
+        if user.router_ids:
+            router_query = router_query.filter(Router.id.in_(user.router_ids))
+        if user.project_id:
+            router_query = router_query.filter(Router.project_id == user.project_id)
+        
+        if user.router_ids or user.project_id:
+            allowed_router_ids = [r.id for r in router_query.all()]
+            query = query.filter(ConfigBackup.router_id.in_(allowed_router_ids))
+        else:
+            return []
     
     if router_id:
         query = query.filter(ConfigBackup.router_id == router_id)

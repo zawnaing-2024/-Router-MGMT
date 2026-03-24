@@ -15,6 +15,7 @@ class VendorEnum(str, enum.Enum):
     VYOS = "vyos"
     FRR_LINUX = "frr_linux"
     GENERIC = "generic"
+    LINUX = "linux"
 
 
 class RouterStatus(str, enum.Enum):
@@ -57,6 +58,8 @@ class Router(Base):
     notes = Column(Text, nullable=True)
     uptime_seconds = Column(Integer, nullable=True)
     version = Column(String(128), nullable=True)
+    custom_commands = Column(JSON, default=list)
+    project_id = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -260,3 +263,24 @@ class RouterLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     router = relationship("Router", backref="logs")
+
+
+class UserRole(str, enum.Enum):
+    ADMIN = "ADMIN"
+    OPERATOR = "OPERATOR"
+    VIEWER = "VIEWER"
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(64), unique=True, nullable=False, index=True)
+    email = Column(String(128), unique=True, nullable=False, index=True)
+    password_hash = Column(String(256), nullable=False)
+    role = Column(String(16), default="VIEWER")
+    router_ids = Column(JSON, default=list)
+    project_id = Column(Integer, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())

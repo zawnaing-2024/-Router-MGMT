@@ -8,6 +8,26 @@ const api = axios.create({
   }
 })
 
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
+
 export const routerApi = {
   list: (params?: { skip?: number; limit?: number; vendor?: string; status?: string; search?: string }) =>
     api.get<Router[]>('/routers', { params }),
@@ -31,7 +51,10 @@ export const routerApi = {
     api.post<ConnectionTestResponse>(`/routers/${id}/connect`),
 
   executeCommand: (id: number, command: string) =>
-    api.post<CommandResponse>(`/routers/${id}/command`, { command })
+    api.post<CommandResponse>(`/routers/${id}/command`, { command }),
+
+  updateCustomCommands: (id: number, commands: { id: string; name: string; command: string }[]) =>
+    api.put(`/routers/${id}/custom-commands`, { commands })
 }
 
 export const backupApi = {
@@ -138,7 +161,10 @@ export const metricsApi = {
     api.post('/routers/metrics/collect-all'),
 
   cleanup: (days: number = 30) =>
-    api.delete('/routers/metrics/cleanup', { params: { days } })
+    api.delete('/routers/metrics/cleanup', { params: { days } }),
+
+  getNetworkInfo: (routerId: number) =>
+    api.get(`/routers/${routerId}/network-info`)
 }
 
 export const pingMetricsApi = {
@@ -283,6 +309,37 @@ export const routerLogsApi = {
 
   clearLogs: (routerId: number) =>
     api.delete(`/routers/${routerId}/logs`)
+}
+
+export const authApi = {
+  login: (username: string, password: string) =>
+    api.post<{ token: string; user: any }>('/auth/login', { username, password }),
+  
+  register: (data: { username: string; email: string; password: string; role?: string; router_ids?: number[]; project_id?: number | null }) =>
+    api.post('/auth/register', data),
+  
+  listUsers: () =>
+    api.get<any[]>('/auth/users'),
+  
+  updateUser: (id: number, data: { username?: string; email?: string; password?: string; role?: string; router_ids?: number[]; is_active?: boolean; project_id?: number | null }) =>
+    api.put(`/auth/users/${id}`, data),
+  
+  deleteUser: (id: number) =>
+    api.delete(`/auth/users/${id}`)
+}
+
+export const projectApi = {
+  list: () =>
+    api.get<any[]>('/projects'),
+  
+  create: (data: { name: string; description?: string }) =>
+    api.post('/projects', data),
+  
+  update: (id: number, data: { name: string; description?: string }) =>
+    api.put(`/projects/${id}`, data),
+  
+  delete: (id: number) =>
+    api.delete(`/projects/${id}`)
 }
 
 export default api

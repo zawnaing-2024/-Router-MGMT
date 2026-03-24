@@ -21,12 +21,30 @@ import {
   Wrench,
   Download,
   Upload,
-  History
+  History,
+  LogOut
 } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const isCollapsed = ref(false)
+
+const currentUser = ref<{ username: string; role: string } | null>(null)
+
+function loadUser() {
+  const userStr = localStorage.getItem('user')
+  if (userStr) {
+    currentUser.value = JSON.parse(userStr)
+  }
+}
+
+function logout() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  router.push('/login')
+}
+
+loadUser()
 
 const navItems = [
   { path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard },
@@ -146,6 +164,18 @@ const isActive = (path: string) => {
         </router-link>
       </div>
     </nav>
+
+    <div class="p-3 border-t border-slate-700">
+      <div class="px-3 py-2 flex items-center justify-between">
+        <div v-if="!isCollapsed" class="text-xs">
+          <p class="text-white font-medium">{{ currentUser?.username }}</p>
+          <p class="text-slate-500">{{ currentUser?.role }}</p>
+        </div>
+        <button @click="logout" class="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-red-400" :title="isCollapsed ? 'Logout' : ''">
+          <LogOut class="w-5 h-5" />
+        </button>
+      </div>
+    </div>
 
     <div class="p-3 border-t border-slate-700">
       <div v-if="!isCollapsed" class="px-3 py-2">

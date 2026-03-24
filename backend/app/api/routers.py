@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional
 from datetime import datetime
+import jwt
 
 from app.core.database import get_db
 from app.core.security import encrypt_password, decrypt_password
-from app.models import Router, RouterStatus, RouterLog
+from app.models import Router, RouterStatus, RouterLog, User
 from app.schemas import (
     RouterCreate, RouterUpdate, RouterResponse, RouterListResponse,
     CommandRequest, CommandResponse, ConnectionTestResponse
@@ -13,6 +16,32 @@ from app.schemas import (
 from app.services import SSHService, test_connection
 
 router = APIRouter(prefix="/routers", tags=["Routers"])
+
+SECRET_KEY = "your-secret-key-change-in-production-use-strong-random-key"
+ALGORITHM = "HS256"
+
+
+def get_current_user_id(token: str = None) -> Optional[int]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("sub")
+    except:
+        return None
+
+
+def get_user_from_token(authorization: str = None) -> Optional[User]:
+    if not authorization:
+        return None
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        db = next(get_db())
+        user = db.query(User).filter(User.id == payload.get("sub")).first()
+        return user
+    except:
+        return None
 
 
 def log_router_event(db: Session, router_id: int, level: str, source: str, message: str, details: dict = None):
@@ -34,34 +63,67 @@ def list_routers(
     vendor: Optional[str] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    project_id: Optional[int] = None,
+    authorization: str = Header(None),
     db: Session = Depends(get_db)
 ):
+    user = get_user_from_token(authorization)
     query = db.query(Router)
-    
+
+    if user and user.role.lower() != "admin":
+        conditions = []
+        if user.router_ids:
+            conditions.append(Router.id.in_(user.router_ids))
+        if user.project_id:
+            conditions.append(Router.project_id == user.project_id)
+        
+        if conditions:
+            query = query.filter(or_(*conditions))
+        else:
+            return []
+
+    if project_id:
+        query = query.filter(Router.project_id == project_id)
+
     if vendor:
         query = query.filter(Router.vendor == vendor)
     if status:
         query = query.filter(Router.status == status)
     if search:
         query = query.filter(
-            (Router.hostname.ilike(f"%{search}%")) |
-            (Router.ip_address.ilike(f"%{search}%")) |
-            (Router.location.ilike(f"%{search}%"))
+            (Router.hostname.contains(search)) |
+            (Router.ip_address.contains(search))
         )
-    
-    return query.order_by(Router.hostname).offset(skip).limit(limit).all()
+
+    return query.offset(skip).limit(limit).all()
 
 
 @router.get("/{router_id}", response_model=RouterResponse)
-def get_router(router_id: int, db: Session = Depends(get_db)):
+def get_router(router_id: int, authorization: str = Header(None), db: Session = Depends(get_db)):
+    user = get_user_from_token(authorization)
     router = db.query(Router).filter(Router.id == router_id).first()
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
+    
+    if user and user.role.lower() != "admin":
+        has_access = False
+        if user.router_ids and router_id in user.router_ids:
+            has_access = True
+        if user.project_id and router.project_id == user.project_id:
+            has_access = True
+        if not has_access:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
     return router
 
 
 @router.post("", response_model=RouterResponse, status_code=201)
-def create_router(router_data: RouterCreate, db: Session = Depends(get_db)):
+def create_router(router_data: RouterCreate, authorization: str = Header(None), db: Session = Depends(get_db)):
+    user = get_user_from_token(authorization)
+    
+    if user and user.role.lower() != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can create routers")
+    
     existing = db.query(Router).filter(
         (Router.hostname == router_data.hostname) |
         (Router.ip_address == router_data.ip_address)
@@ -114,7 +176,12 @@ def create_router(router_data: RouterCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{router_id}", response_model=RouterResponse)
-def update_router(router_id: int, router_data: RouterUpdate, db: Session = Depends(get_db)):
+def update_router(router_id: int, router_data: RouterUpdate, authorization: str = Header(None), db: Session = Depends(get_db)):
+    user = get_user_from_token(authorization)
+    
+    if user and user.role.lower() != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can update routers")
+    
     router = db.query(Router).filter(Router.id == router_id).first()
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
@@ -144,7 +211,12 @@ def update_router(router_id: int, router_data: RouterUpdate, db: Session = Depen
 
 
 @router.delete("/{router_id}", status_code=204)
-def delete_router(router_id: int, db: Session = Depends(get_db)):
+def delete_router(router_id: int, authorization: str = Header(None), db: Session = Depends(get_db)):
+    user = get_user_from_token(authorization)
+    
+    if user and user.role.lower() != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can delete routers")
+    
     router = db.query(Router).filter(Router.id == router_id).first()
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
@@ -211,7 +283,16 @@ def test_router_connection(router_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{router_id}/command", response_model=CommandResponse)
-def execute_command(router_id: int, cmd_data: CommandRequest, db: Session = Depends(get_db)):
+def execute_command(router_id: int, cmd_data: CommandRequest, authorization: str = Header(None), db: Session = Depends(get_db)):
+    user = get_user_from_token(authorization)
+    
+    if user and user.role == "VIEWER":
+        raise HTTPException(status_code=403, detail="Viewers cannot execute commands")
+    
+    if user and user.role.lower() != "admin" and user.router_ids:
+        if router_id not in user.router_ids:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
     router = db.query(Router).filter(Router.id == router_id).first()
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
@@ -248,3 +329,25 @@ def execute_command(router_id: int, cmd_data: CommandRequest, db: Session = Depe
     except Exception as e:
         log_router_event(db, router_id, "error", "command", f"Command execution error: {str(e)}", {"command": cmd_data.command})
         return CommandResponse(success=False, output="", error=str(e))
+
+
+class CustomCommand(BaseModel):
+    id: str
+    name: str
+    command: str
+
+
+class CustomCommandsUpdate(BaseModel):
+    commands: list[dict]
+
+
+@router.put("/{router_id}/custom-commands", response_model=dict)
+def update_custom_commands(router_id: int, data: CustomCommandsUpdate, db: Session = Depends(get_db)):
+    router = db.query(Router).filter(Router.id == router_id).first()
+    if not router:
+        raise HTTPException(status_code=404, detail="Router not found")
+    
+    router.custom_commands = data.commands
+    db.commit()
+    
+    return {"message": "Custom commands updated", "commands": data.commands}

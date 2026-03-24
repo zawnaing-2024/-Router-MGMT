@@ -14,6 +14,7 @@ class VendorEnum(str, Enum):
     VYOS = "vyos"
     FRR_LINUX = "frr_linux"
     GENERIC = "generic"
+    LINUX = "linux"
 
 
 class RouterStatus(str, Enum):
@@ -64,6 +65,7 @@ class RouterBase(BaseModel):
     location: Optional[str] = None
     tags: list[str] = []
     notes: Optional[str] = None
+    custom_commands: list[dict] = []
 
 
 class RouterCreate(RouterBase):
@@ -82,6 +84,7 @@ class RouterUpdate(BaseModel):
     location: Optional[str] = None
     tags: Optional[list[str]] = None
     notes: Optional[str] = None
+    custom_commands: Optional[list[dict]] = None
 
 
 class RouterResponse(RouterBase):
@@ -94,6 +97,7 @@ class RouterResponse(RouterBase):
     last_seen: Optional[datetime]
     created_at: datetime
     updated_at: Optional[datetime]
+    custom_commands: list[dict] = []
 
 
 class RouterListResponse(BaseModel):
@@ -525,3 +529,51 @@ class RouterLogResponse(BaseModel):
 class ManualTriggerRequest(BaseModel):
     router_ids: list[int] = []
     message: Optional[str] = None
+
+
+class UserRole(str, Enum):
+    ADMIN = "ADMIN"
+    OPERATOR = "OPERATOR"
+    VIEWER = "VIEWER"
+
+
+class UserBase(BaseModel):
+    username: str
+    email: str
+    role: str = "VIEWER"
+    router_ids: list[int] = []
+    project_id: Optional[int] = None
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    role: Optional[str] = None
+    router_ids: Optional[list[int]] = None
+    is_active: Optional[bool] = None
+    project_id: Optional[int] = None
+
+
+class UserResponse(UserBase):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime]
+    project_id: Optional[int] = None
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    token: str
+    user: UserResponse

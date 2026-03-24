@@ -1,4 +1,4 @@
-export type Vendor = 'cisco_ios' | 'cisco_ios_xe' | 'juniper_junos' | 'mikrotik_routeros' | 'huawei' | 'arista_eos' | 'vyos' | 'frr_linux' | 'generic'
+export type Vendor = 'cisco_ios' | 'cisco_ios_xe' | 'juniper_junos' | 'mikrotik_routeros' | 'huawei' | 'arista_eos' | 'vyos' | 'frr_linux' | 'generic' | 'linux'
 export type RouterStatus = 'online' | 'offline' | 'warning' | 'unknown'
 export type JobType = 'backup' | 'command' | 'template' | 'ping'
 export type JobStatus = 'pending' | 'running' | 'success' | 'failed'
@@ -22,6 +22,7 @@ export interface Router {
   last_seen?: string
   created_at: string
   updated_at?: string
+  custom_commands?: { id: string; name: string; command: string }[]
 }
 
 export interface ConfigBackup {
@@ -257,4 +258,54 @@ export interface RouterLog {
   message: string
   details: Record<string, any>
   created_at: string
+}
+
+export interface NetworkInterface {
+  name: string
+  state: string
+  ip: string
+  description?: string
+  speed_mbps?: number
+  duplex?: string
+  port?: string
+  tx_bps?: number
+  rx_bps?: number
+  tx_bpsHuman?: string
+  rx_bpsHuman?: string
+  tx_bytes: number
+  rx_bytes: number
+  tx_packets?: number
+  rx_packets?: number
+  tx_errors?: number
+  rx_errors?: number
+}
+
+export interface BGPPeer {
+  neighbor: string
+  state: string
+  asn?: string
+  uptime?: string
+  description?: string
+}
+
+export interface NetworkInfo {
+  interfaces: NetworkInterface[]
+  bgp_peers: BGPPeer[]
+}
+
+export interface QuickAction {
+  id: string
+  name: string
+  icon: string
+  command: string
+  category: 'network' | 'system' | 'routing' | 'firewall'
+}
+
+export interface QuickCommand {
+  id: string
+  name: string
+  description: string
+  command: string
+  vendor: Vendor | 'all'
+  category: string
 }

@@ -1,27 +1,63 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from typing import List, Optional
 from datetime import datetime, timedelta
 import hashlib
+import jwt
 
 from app.core.database import get_db
-from app.models import Router, ConfigBackup, PingMetric, ConfigChange, RouterStatus
+from app.models import Router, ConfigBackup, PingMetric, ConfigChange, RouterStatus, User
 from app.schemas import UptimeReport, FirmwareInfo, ConfigChangeResponse
 from app.services import SSHService
 from app.core.security import decrypt_password
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
+SECRET_KEY = "your-secret-key-change-in-production-use-strong-random-key"
+ALGORITHM = "HS256"
+
+
+def get_user_from_token(authorization: str = None) -> Optional[User]:
+    if not authorization:
+        return None
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        db = next(get_db())
+        user = db.query(User).filter(User.id == payload.get("sub")).first()
+        return user
+    except:
+        return None
+
 
 @router.get("/uptime", response_model=List[UptimeReport])
 def get_uptime_report(
     days: int = 30,
+    authorization: str = Header(None),
     db: Session = Depends(get_db)
 ):
+    user = get_user_from_token(authorization)
+    
+    if not user:
+        return []
+    
+    router_query = db.query(Router)
+    if user.role.lower() != "admin":
+        conditions = []
+        if user.router_ids:
+            conditions.append(Router.id.in_(user.router_ids))
+        if user.project_id:
+            conditions.append(Router.project_id == user.project_id)
+        
+        if conditions:
+            router_query = router_query.filter(or_(*conditions))
+        else:
+            return []
+    
     start_date = datetime.utcnow() - timedelta(days=days)
     
-    routers = db.query(Router).all()
+    routers = router_query.all()
     reports = []
     
     for router in routers:
@@ -59,8 +95,26 @@ def get_uptime_report(
 
 
 @router.get("/firmware", response_model=List[FirmwareInfo])
-def get_firmware_versions(db: Session = Depends(get_db)):
-    routers = db.query(Router).filter(Router.status == RouterStatus.ONLINE).all()
+def get_firmware_versions(authorization: str = Header(None), db: Session = Depends(get_db)):
+    user = get_user_from_token(authorization)
+    
+    if not user:
+        return []
+    
+    router_query = db.query(Router).filter(Router.status == RouterStatus.ONLINE)
+    if user.role.lower() != "admin":
+        conditions = []
+        if user.router_ids:
+            conditions.append(Router.id.in_(user.router_ids))
+        if user.project_id:
+            conditions.append(Router.project_id == user.project_id)
+        
+        if conditions:
+            router_query = router_query.filter(or_(*conditions))
+        else:
+            return []
+    
+    routers = router_query.all()
     firmware_info = []
     
     for router in routers:
@@ -127,9 +181,28 @@ def get_firmware_versions(db: Session = Depends(get_db)):
 @router.get("/config-changes", response_model=List[ConfigChangeResponse])
 def get_config_changes(
     router_id: Optional[int] = None,
+    authorization: str = Header(None),
     db: Session = Depends(get_db)
 ):
+    user = get_user_from_token(authorization)
+    
+    if not user:
+        return []
+    
     query = db.query(ConfigChange)
+    
+    if user.role.lower() != "admin":
+        router_query = db.query(Router.id)
+        if user.router_ids:
+            router_query = router_query.filter(Router.id.in_(user.router_ids))
+        if user.project_id:
+            router_query = router_query.filter(Router.project_id == user.project_id)
+        
+        if user.router_ids or user.project_id:
+            allowed_router_ids = [r.id for r in router_query.all()]
+            query = query.filter(ConfigChange.router_id.in_(allowed_router_ids))
+        else:
+            return []
     
     if router_id:
         query = query.filter(ConfigChange.router_id == router_id)

@@ -8,11 +8,23 @@ from datetime import datetime
 from app.core.database import engine, Base, SessionLocal
 from app.core.config import settings
 from app.api import (
-    routers_router, backups_router, templates_router,
-    jobs_router, dashboard_router, router_groups_router,
-    batch_router, audit_logs_router, export_import_router,
-    reports_router, remediation_router, notifications_router,
-    router_logs_router
+    routers_router,
+    backups_router,
+    templates_router,
+    jobs_router,
+    dashboard_router,
+    metrics_router,
+    ping_metrics_router,
+    router_groups_router,
+    batch_router,
+    audit_logs_router,
+    export_import_router,
+    reports_router,
+    remediation_router,
+    notifications_router,
+    router_logs_router,
+    auth_router,
+    projects_router,
 )
 from app.api.terminal import websocket_endpoint
 from app.api.metrics import router as metrics_router
@@ -135,6 +147,8 @@ app.include_router(reports_router, prefix="/api")
 app.include_router(remediation_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
 app.include_router(router_logs_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
+app.include_router(projects_router, prefix="/api")
 
 
 @app.get("/")
